@@ -39,6 +39,7 @@ system_dlkm /system_dlkm ext4 ro wait,slotselect,avb,logical,first_stage_mount
 /dev/block/by-name/metadata /metadata ext4 noatime,nosuid,nodev,discard wait,check,formattable,first_stage_mount
 
 /dev/block/by-name/userdata /data f2fs noatime,nosuid,nodev,discard,noflush_merge,fsync_mode=nobarrier,reserve_root=134217,resgid=1065,inlinecrypt wait,check,formattable,quota,latemount,resize,reservedsize=128m,checkpoint=fs,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,keydirectory=/metadata/vold/metadata_encryption,fsverity
+/dev/block/by-name/userdata /data ext4 noatime,nosuid,nodev,inlinecrypt,errors=panic wait,check,quota,latemount,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,keydirectory=/metadata/vold/metadata_encryption
 
 
 
@@ -159,25 +160,33 @@ system_dlkm /system_dlkm ext4 ro wait,slotselect,avb,logical,first_stage_mount
 
 
 
+tr_region /tr_region erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_region /tr_region ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_company /tr_company erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_company /tr_company ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_carrier /tr_carrier erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_carrier /tr_carrier ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_product /tr_product erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_product /tr_product ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_preload /tr_preload erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_preload /tr_preload ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_overlayfs /tr_overlayfs erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_overlayfs /tr_overlayfs ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_misc /tr_misc erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_misc /tr_misc ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+
+tr_manifest /mnt/vendor/tr_manifest erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
+tr_manifest /mnt/vendor/tr_manifest ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
+
+/mnt/vendor/tr_manifest /tr_manifest none ro,bind wait,nofail
+
+
+
+
+
+/dev/block/by-name/tranfs /tranfs ext4 noatime,nosuid,nodev,noauto_da_alloc,discard wait,check,formattable,nofail,first_stage_mount
+
+
+
+
 /dev/block/by-name/tkv /tkv emmc defaults defaults
-
-
-
-
-
-tr_mi /tr_mi ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_mi /tr_mi erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_theme /tr_theme ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_theme /tr_theme erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_region /tr_region ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_region /tr_region erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_company /tr_company ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_company /tr_company erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_carrier /tr_carrier ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_carrier /tr_carrier erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_product /tr_product ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_product /tr_product erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_preload /tr_preload ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_preload /tr_preload erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_overlayfs /tr_overlayfs ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
-tr_overlayfs /tr_overlayfs erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/vendor/etc/tran_avb.pubkey,nofail
