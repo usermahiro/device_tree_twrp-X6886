@@ -31,7 +31,7 @@ service mobicore /vendor/bin/mcDriverDaemon --P1 /mnt/vendor/persist/mcRegistry 
 	-r /vendor/app/mcRegistry/07210000000000000000000000000000.drbin
     user root
     group root system
-    seclabel u:r:mtk_recovery_tee:s0
+    seclabel u:r:recovery:s0
 
 # t-Drv naming
 # 020f0000000000000000000000000000.drbin : utils

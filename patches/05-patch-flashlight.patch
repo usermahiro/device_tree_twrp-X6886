@@ -1,0 +1,28 @@
+--- a/bootable/recovery/gui/action.cpp
++++ b/bootable/recovery/gui/action.cpp
+@@ -2601,12 +2601,22 @@
+ 		}
+ 		
+ 		if (!path_one.empty()) {
+-			bright_one = path_one + "/brightness";
+-			max_one = path_one + "/max_brightness";
++			struct stat fl_st;
++			bool fl_direct = false;
++			if (stat(path_one.c_str(), &fl_st) == 0 && S_ISREG(fl_st.st_mode)) {
++				// maintainer gave a direct file (e.g. Transsion torch_level)
++				fl_direct = true;
++				bright_one = path_one;
++				max_one = path_one.substr(0, path_one.find_last_of('/')) + "/max_brightness";
++			} else {
++				bright_one = path_one + "/brightness";
++				max_one = path_one + "/max_brightness";
++			}
+ 			if (TWFunc::Path_Exists(max_one)) {
+ 				TWFunc::read_file(max_one, max_brt_one);
+ 			} else {
+-				max_brt_one = "1";
++				// torch_level: 2 = on (1 does not light the torch)
++				max_brt_one = fl_direct ? "2" : "1";
+ 			}
+ 			if (TWFunc::Path_Exists(bright_one)) {
+ 				TWFunc::read_file(bright_one, fl_one_on);

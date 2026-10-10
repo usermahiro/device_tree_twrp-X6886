@@ -1,0 +1,377 @@
+name: Build Orangefox
+
+on:
+  workflow_dispatch:
+    inputs:
+      SYNC_URL:
+        description: 'SYNC_URL'
+        required: true
+        default: 'https://gitlab.com/OrangeFox/sync.git'
+      MANIFEST_BRANCH:
+        description: 'MANIFEST_BRANCH'
+        required: true
+        default: '14.1'
+        type: choice
+        options:
+          - 12.1
+          - 14.1
+      DEVICE_PATH:
+        description: 'DEVICE_PATH'
+        required: true
+        default: 'device/infinix/X6886'
+      COMMON_TREE_URL:
+        description: 'COMMON_TREE_URL'
+        required: false
+      COMMON_TREE_BRANCH:
+        description: 'COMMON_TREE_BRANCH'
+        required: false
+        default: 'main'
+      COMMON_PATH:
+        description: 'COMMON_PATH'
+        required: false
+      DEVICE_NAME:
+        description: 'DEVICE_NAME'
+        required: true
+        default: 'X6886'
+      MAKEFILE_NAME:
+        description: 'MAKEFILE_NAME'
+        required: true
+        default: 'fox_X6886'
+      BUILD_TARGET:
+        description: 'BUILD_TARGET'
+        required: true
+        default: 'vendorboot'
+
+jobs:
+  build:
+    name: build (${{ matrix.variant }})
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [default, lk]
+    if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    env:
+      USE_CCACHE: '1'
+      CCACHE_EXEC: /usr/bin/ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}/workspace
+      CCACHE_MAXSIZE: 5G
+      CCACHE_COMPRESS: '1'
+      CCACHE_COMPRESSLEVEL: '6'
+      # Fresh repo sync gives the toolchain new mtimes every run: hash the
+      # compiler by content or every single compile misses.
+      CCACHE_COMPILERCHECK: content
+      CCACHE_SLOPPINESS: include_file_mtime,include_file_ctime,time_macros
+    steps:
+
+    - name: Check Out
+      uses: actions/checkout@v4
+
+    - name: Cleanup
+      uses: rokibhasansagar/slimhub_actions@main
+
+    - name: Initialize workspace
+      run: |
+        mkdir workspace
+        cd workspace
+        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
+      id: pwd
+
+    - name: Prepare the build environment
+      run: |
+        sudo apt update && sudo apt upgrade -y
+        DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
+            linux-modules-extra-$(uname -r) \
+            git python3 tar aria2 patch ccache
+        git clone https://gitlab.com/OrangeFox/misc/scripts
+        cd scripts
+        sudo bash setup/android_build_env.sh
+        sed -i 's/cd -/cd ../g' setup/install_android_sdk.sh
+        sudo bash setup/install_android_sdk.sh
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Install OpenJDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '11'
+
+    - name: Setup SSH Keys
+      if: ${{ startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+          ssh-private-key: |
+            ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Sync OrangeFox sources and minimal manifest
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}
+        git clone ${{ github.event.inputs.SYNC_URL }}
+        cd sync
+        ./orangefox_sync.sh --branch ${{ github.event.inputs.MANIFEST_BRANCH }} --path ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Install device tree from this repository
+      run: |
+        set -e
+        SRC=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        DEST="$SRC/${{ github.event.inputs.DEVICE_PATH }}"
+        mkdir -p "$DEST"
+        git -C "${{ github.workspace }}" ls-files -z \
+          | grep -zv -e '^\.github/' -e '^tools/' \
+          | tar -C "${{ github.workspace }}" --null -T - -cf - \
+          | tar -C "$DEST" -xf -
+        test -f "$DEST/vendorsetup.sh" || { echo "::error::vendorsetup.sh missing in $DEST"; exit 1; }
+        test -d "$DEST/prebuilt/modules" || { echo "::error::prebuilt/modules missing"; exit 1; }
+        test -d "$DEST/recovery/root/lib/modules/touch" || { echo "::error::recovery/root/lib/modules/touch missing"; exit 1; }
+        ls -al "$DEST"
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Select fstab variant (${{ matrix.variant }})
+      run: |
+        set -e
+        DEST="${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/${{ github.event.inputs.DEVICE_PATH }}"
+        FS="$DEST/recovery/root/first_stage_ramdisk"
+        [ -f "$FS/fstab.mt6789" ] && [ -f "$FS/fstab.mt6789lk" ] || { echo "::error::fstab.mt6789 / fstab.mt6789lk missing"; exit 1; }
+        if [ "${{ matrix.variant }}" = "lk" ]; then
+          # LK variant: fstab.mt6789lk is installed as fstab.mt6789
+          mv -f "$FS/fstab.mt6789lk" "$FS/fstab.mt6789"
+        else
+          rm -f "$FS/fstab.mt6789lk"
+        fi
+        sha256sum "$FS"/fstab.mt6789*
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Clone common tree
+      if: |
+        github.event.inputs.COMMON_TREE_URL != null
+        && github.event.inputs.COMMON_PATH != null
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.COMMON_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 12
+
+    - name: Workaround for missing repo projects.
+      run : |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        repo sync external/gflags
+        repo sync external/guava
+        repo sync hardware/google/interfaces
+        repo sync hardware/google/pixel
+
+    - name: Restore ccache
+      id: ccache-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.event.inputs.DEVICE_NAME }}-
+
+    - name: Configure ccache
+      run: |
+        set -e
+        test -x "$CCACHE_EXEC" || { echo "::error::$CCACHE_EXEC not found"; exit 1; }
+        mkdir -p "$CCACHE_DIR"
+        ccache --version | head -1
+        ccache --set-config=max_size="$CCACHE_MAXSIZE"
+        ccache --zero-stats
+        echo "restored: ${{ steps.ccache-restore.outputs.cache-matched-key || 'none (cold cache)' }}"
+        ccache --show-stats | head -20
+
+    - name: Building recovery
+      id: build
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        set +e
+        source build/envsetup.sh
+        source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        export FOX_USE_ZSTD_BINARY=1
+        set -eo pipefail
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng
+        make clean
+        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) 2>&1 | tee ${{ steps.pwd.outputs.workspace-folder }}/build.log
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Check the output directory
+      run: |
+        OUT=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+        ls -al "$OUT"
+
+    - name: Check module layout in ramdisks
+      continue-on-error: true
+      run: |
+        OUT=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+
+        v_count=$(find "$OUT/vendor_ramdisk/lib/modules" -name '*.ko' 2>/dev/null | wc -l)
+        echo "vendor_ramdisk/lib/modules: $v_count .ko"
+
+        t_count=$(find "$OUT/recovery/root/lib/modules/touch" -name '*.ko' 2>/dev/null | wc -l)
+        echo "recovery/root/lib/modules/touch: $t_count .ko"
+        if [ "$t_count" -eq 0 ]; then
+          echo "::warning::Modul touchscreen di recovery/root/lib/modules/touch tidak ditemukan!"
+        fi
+
+        root_count=$(find "$OUT/recovery/root/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
+        echo "recovery/root/lib/modules: $root_count .ko"
+        if [ "$root_count" -gt 0 ]; then
+          echo "::warning::Ditemukan $root_count .ko langsung di root recovery/root/lib/modules! Modul platform berisiko menduplikasi vendor_ramdisk."
+        fi
+
+    - name: ccache stats
+      if: always() && steps.build.conclusion != 'skipped'
+      id: ccache-stats
+      run: |
+        ccache --show-stats -v || true
+        HITS=$(ccache --print-stats | awk -F'\t' '$1=="direct_cache_hit"||$1=="preprocessed_cache_hit"{s+=$2} END{print s+0}')
+        MISS=$(ccache --print-stats | awk -F'\t' '$1=="cache_miss"{s+=$2} END{print s+0}')
+        echo "hits=$HITS misses=$MISS"
+        {
+          echo "### ccache (${{ matrix.variant }})"
+          echo "- hits: $HITS"
+          echo "- misses: $MISS"
+          echo "- restored key: ${{ steps.ccache-restore.outputs.cache-matched-key || 'none (cold cache)' }}"
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$((HITS + MISS))" -eq 0 ]; then
+          echo "::warning::ccache saw 0 compiler calls - Soong did not use it (check USE_CCACHE / CCACHE_EXEC)."
+        fi
+        if [ -n "$(ls -A "$CCACHE_DIR" 2>/dev/null)" ] && [ "$((HITS + MISS))" -gt 0 ]; then
+          echo "save=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "save=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Save ccache
+      id: ccache-save
+      if: always() && matrix.variant == 'default' && steps.ccache-stats.outputs.save == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+    - name: Prune old ccache entries
+      if: always() && steps.ccache-save.outcome == 'success'
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Keep only the newest entry so the 10 GB repo cache quota is not eaten.
+        PREFIX="ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.event.inputs.DEVICE_NAME }}-"
+        gh cache list --repo "$GITHUB_REPOSITORY" --key "$PREFIX" --sort created_at --order desc --limit 100 --json id --jq '.[1:][].id' \
+          | while read -r id; do gh cache delete "$id" --repo "$GITHUB_REPOSITORY" || true; done
+
+    - name: Verify image
+      run: |
+        set -e
+        WS=${{ steps.pwd.outputs.workspace-folder }}
+        OUT=$WS/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+        mkdir -p "$WS/variant"
+
+        if [ ! -s "$OUT/vendor_boot.img" ]; then
+          echo "::error::vendor_boot.img was not produced."
+          exit 1
+        fi
+        IMG_SIZE=$(stat -c %s "$OUT/vendor_boot.img")
+        echo "vendor_boot: $IMG_SIZE bytes (partition: 67108864)"
+        if [ "$IMG_SIZE" -gt 67108864 ]; then
+          echo "::error::vendor_boot is larger than the 64 MiB partition."
+          exit 1
+        fi
+
+        cp "$OUT/vendor_boot.img" "$WS/variant/vendor_boot.img"
+
+    - name: Upload image
+      uses: actions/upload-artifact@v4
+      with:
+        name: vendor_boot-${{ matrix.variant }}
+        path: ${{ steps.pwd.outputs.workspace-folder }}/variant/vendor_boot.img
+        if-no-files-found: error
+
+    - name: Upload build log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log-${{ github.run_id }}-${{ matrix.variant }}
+        path: ${{ steps.pwd.outputs.workspace-folder }}/build.log
+        if-no-files-found: ignore
+
+  release:
+    name: release
+    needs: build
+    if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+
+    - name: Download images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: vendor_boot-*
+        path: images
+
+    - name: Prepare release files
+      id: rel
+      run: |
+        set -e
+        DEV=${{ github.event.inputs.DEVICE_NAME }}
+        DATE=$(date -u +%Y%m%d)
+        SHA=${GITHUB_SHA::7}
+        mkdir -p release
+        for v in default lk; do
+          test -s "images/vendor_boot-$v/vendor_boot.img" || { echo "::error::missing vendor_boot image ($v)"; exit 1; }
+        done
+        cp "images/vendor_boot-default/vendor_boot.img" "release/OrangeFox-${DEV}-${DATE}-${SHA}-vendor_boot.img"
+        cp "images/vendor_boot-lk/vendor_boot.img" "release/OrangeFox-${DEV}-${DATE}-${SHA}-vendor_boot-LK.img"
+        cd release
+        sha256sum * > SHA256SUMS.txt
+        ls -al
+
+        echo "date=$DATE" >> "$GITHUB_OUTPUT"
+        echo "tree_sha=$SHA" >> "$GITHUB_OUTPUT"
+        echo "image=OrangeFox-${DEV}-${DATE}-${SHA}-vendor_boot.img" >> "$GITHUB_OUTPUT"
+        echo "image_lk=OrangeFox-${DEV}-${DATE}-${SHA}-vendor_boot-LK.img" >> "$GITHUB_OUTPUT"
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/*
+        name: OrangeFox ${{ github.event.inputs.DEVICE_NAME }} -${{ steps.rel.outputs.date }}
+        tag_name: ${{ github.event.inputs.DEVICE_NAME }}-${{ steps.rel.outputs.date }}-${{ github.run_number }}
+        prerelease: true
+        body: |
+          Unofficial OrangeFox build for **${{ github.event.inputs.DEVICE_NAME }}**.
+
+          | | |
+          |---|---|
+          | Manifest | ${{ github.event.inputs.MANIFEST_BRANCH }} |
+          | Target | ${{ github.event.inputs.BUILD_TARGET }} |
+          | Source | ${{ github.repository }} @ `${{ steps.rel.outputs.tree_sha }}` (${{ github.ref_name }}) |
+          | Built | ${{ steps.rel.outputs.date }} (UTC) |
+
+          | Variant | Image | For |
+          |---|---|---|
+          | Default | `${{ steps.rel.outputs.image }}` | Everyone (recommended) |
+          | LK | `${{ steps.rel.outputs.image_lk }}` | Only for users running **Fenrir-LKPatch** |
+
+          The **LK** image is for people who use Fenrir-LKPatch. If you do not use it, flash the default image.
+
+          Flash Step:
+          ```
+          fastboot flash vendor_boot_a <image>
+          fastboot flash vendor_boot_b <image>
+          ```
+          Verify the download with `SHA256SUMS.txt`. Back up before flashing.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
