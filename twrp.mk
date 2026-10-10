@@ -25,6 +25,9 @@ TW_NO_EXFAT_FUSE            := true
 # Debug
 TWRP_INCLUDE_LOGCAT := true
 
+# Use our own init.recovery.usb.rc
+TW_EXCLUDE_DEFAULT_USB_INIT := true
+
 # Fastbootd
 TW_INCLUDE_FASTBOOTD := true
 
@@ -35,7 +38,7 @@ TW_MAX_BRIGHTNESS := 4095
 # Additional configs
 TW_EXTRA_LANGUAGES := true
 TW_EXCLUDE_APEX := true
-TW_FRAMERATE := 120
+TW_FRAMERATE := 60
 TW_THEME := portrait_hdpi
 TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID  := true
 TW_LOAD_VENDOR_BOOT_MODULES := true
