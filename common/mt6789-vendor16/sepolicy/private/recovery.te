@@ -67,7 +67,8 @@ recovery_only(`
   allow recovery { keystore_service authorization_service
                    keystore_compat_hal_service }:service_manager find;
   allow recovery keystore:keystore2 add_auth;
-  allow recovery vold_key:keystore2_key { use manage_blob };
+  allow recovery vold_key:keystore2_key { use manage_blob convert_storage_key_to_ephemeral };
+  allow recovery self:key { write search setattr };
   allow recovery locksettings_key:keystore2_key { use get_info req_forced_op };
   allow keystore recovery:binder transfer;
   allow keystore recovery:fd use;
@@ -152,7 +153,9 @@ recovery_only(`
   # Recovery embeds vold metadata-key handling, not the Android vold daemon.
   allow recovery vold_metadata_file:dir create_dir_perms;
   allow recovery vold_metadata_file:file create_file_perms;
-  allow recovery { data_file_type -sdk_sandbox_system_data_file }:dir { create_dir_perms mounton watch relabelfrom relabelto };
+  allow recovery data_file_type:dir { create_dir_perms mounton watch };
+  # relabelfrom on sdk_sandbox_system_data_file is a neverallow in AOSP
+  allow recovery { data_file_type -sdk_sandbox_system_data_file }:dir { relabelfrom relabelto };
   allow recovery cache_file:dir { create_dir_perms relabelfrom relabelto };
   allow recovery cache_file:file { create_file_perms relabelfrom relabelto };
   allow recovery data_file_type:file { create_file_perms relabelfrom relabelto };

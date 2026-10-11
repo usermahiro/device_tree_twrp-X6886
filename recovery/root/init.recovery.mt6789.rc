@@ -22,8 +22,6 @@ on boot
     # GUI is software-rendered (no GPU), so keep CPU clocks up for smooth scrolling.
     write /sys/devices/system/cpu/cpufreq/policy0/scaling_governor performance
     write /sys/devices/system/cpu/cpufreq/policy6/scaling_governor performance
-    # Display driver prints a line every frame; silence kernel console output.
-    write /proc/sys/kernel/printk "1 1 1 1"
 
 on fs
     wait /dev/block/platform/soc/11270000.ufshci
