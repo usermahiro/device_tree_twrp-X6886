@@ -1,5 +1,8 @@
 # Device inputs: kernel-matched modules with their original load metadata,
 # and stock first-stage fstabs. Recovery-only touch modules remain separate.
+# MTK_VENDOR16_RAMDISK_MODULES_DIR is <device>/recovery/root/lib/modules; only
+# its top-level *.ko and modules.* are used (wildcards are not recursive, so
+# the touch/ subdirectory is never copied into the platform ramdisk).
 ifeq ($(strip $(MTK_VENDOR16_RAMDISK_MODULES_DIR)),)
 $(error MTK_VENDOR16_RAMDISK_MODULES_DIR must name this device's module directory)
 endif
