@@ -119,12 +119,6 @@ recovery_only(`
   allow hal_bootctl_default mtk_recovery_ufs_bsg_device:chr_file { open read write getattr ioctl };
   allowxperm hal_bootctl_default mtk_recovery_ufs_bsg_device:chr_file ioctl { 0x2285 };
   allow hal_bootctl_default self:global_capability_class_set sys_rawio;
-  # External SD (exfat): recovery was denied search/mounton on the mounted root.
-  allow recovery exfat:dir { create_dir_perms mounton };
-  allow recovery exfat:file create_file_perms;
-  # USB-OTG sticks are usually FAT32.
-  allow recovery vfat:dir { create_dir_perms mounton };
-  allow recovery vfat:file create_file_perms;
   allow recovery mtk_recovery_fstab_file:file create_file_perms;
   allow recovery mtk_recovery_fstab_file:lnk_file r_file_perms;
   allow init mtk_recovery_fstab_file:lnk_file create_file_perms;
@@ -152,9 +146,7 @@ recovery_only(`
   # Recovery embeds vold metadata-key handling, not the Android vold daemon.
   allow recovery vold_metadata_file:dir create_dir_perms;
   allow recovery vold_metadata_file:file create_file_perms;
-  allow recovery data_file_type:dir { create_dir_perms mounton watch relabelfrom relabelto };
-  allow recovery cache_file:dir { create_dir_perms relabelfrom relabelto };
-  allow recovery cache_file:file { create_file_perms relabelfrom relabelto };
+  allow recovery data_file_type:dir { create_dir_perms mounton watch };
   allow recovery data_file_type:file { create_file_perms relabelfrom relabelto };
   allow recovery data_file_type:lnk_file create_file_perms;
   allow recovery data_file_type:sock_file getattr;
@@ -166,7 +158,7 @@ recovery_only(`
   allow recovery mnt_vendor_file:file create_file_perms;
   allowxperm recovery { system_data_file system_data_root_file media_rw_data_file vendor_data_file }:dir ioctl { 0x6613 0x6615 0x6617 };
   allowxperm recovery { system_data_file tmpfs }:file ioctl { 0xf50c };
-  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x1260 0x127b 0x4c01 0x5331 };
+  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x1260 0x4c01 0x5331 };
   allowxperm recovery misc_block_device:blk_file ioctl { 0x1260 };
   # Attach/read/detach read-only APEX payload files with loop devices.
   allowxperm recovery loop_device:blk_file ioctl {
