@@ -152,7 +152,7 @@ recovery_only(`
   # Recovery embeds vold metadata-key handling, not the Android vold daemon.
   allow recovery vold_metadata_file:dir create_dir_perms;
   allow recovery vold_metadata_file:file create_file_perms;
-  allow recovery data_file_type:dir { create_dir_perms mounton watch relabelfrom relabelto };
+  allow recovery { data_file_type -sdk_sandbox_system_data_file }:dir { create_dir_perms mounton watch relabelfrom relabelto };
   allow recovery cache_file:dir { create_dir_perms relabelfrom relabelto };
   allow recovery cache_file:file { create_file_perms relabelfrom relabelto };
   allow recovery data_file_type:file { create_file_perms relabelfrom relabelto };
