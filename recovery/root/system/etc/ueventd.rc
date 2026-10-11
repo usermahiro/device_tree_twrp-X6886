@@ -28,13 +28,6 @@ subsystem vfio
     devname uevent_devpath
     dirname /dev/vfio
 
-# ueventd can only set permissions on device nodes and their associated
-# sysfs attributes, not on arbitrary paths.
-#
-# format for /dev rules: devname mode uid gid
-# format for /sys rules: nodename attr mode uid gid
-# shortcut: "mtd@NN" expands to "/dev/mtd/mtdNN"
-
 /dev/null                 0666   root       root
 /dev/zero                 0666   root       root
 /dev/full                 0666   root       root
@@ -42,7 +35,6 @@ subsystem vfio
 /dev/tty                  0666   root       root
 /dev/random               0666   root       root
 /dev/urandom              0666   root       root
-# Aside from kernel threads, only prng_seeder needs access to HW RNG
 /dev/hw_random            0400   prng_seeder prng_seeder
 /dev/ashmem*              0666   root       root
 /dev/binder               0666   root       root
@@ -88,6 +80,4 @@ subsystem vfio
 /sys/devices/system/cpu/cpu*   cpufreq/scaling_min_freq   0664  system system
 /sys/devices/virtual/misc/uhid/*/leds/* brightness   0664  system system
 /sys/devices/virtual/misc/uhid/*/leds/* multi_intensity   0664  system system
-#SDD: add TESSCR-25361 by chonglin.yang 2025/05/12 for system monitor start
 /dev/ensignal   0666   root   root
-#SDD: add TESSCR-25361 by chonglin.yang 2025/05/12 for system monitor end

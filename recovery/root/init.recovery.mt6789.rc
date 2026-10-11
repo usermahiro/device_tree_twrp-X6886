@@ -5,7 +5,6 @@ on init
     restorecon_recursive /sys/devices/platform/soc/soc:mtk-leds
     restorecon_recursive /sys/devices/platform/soc/soc:regulator-vibrator/leds/vibrator
     restorecon /sys/devices/platform/soc/mt_usb/saving
-    # Generated mount fstab lives on writable recovery tmpfs.
     symlink /tmp/fstab /etc/fstab
     insmod /lib/modules/touch/adaptive-ts.ko
     insmod /lib/modules/touch/focaltech_ft3683g.ko
@@ -19,7 +18,6 @@ on init
 	start vendor.boot-default
 	
 on boot
-    # GUI is software-rendered (no GPU), so keep CPU clocks up for smooth scrolling.
     write /sys/devices/system/cpu/cpufreq/policy0/scaling_governor performance
     write /sys/devices/system/cpu/cpufreq/policy6/scaling_governor performance
 

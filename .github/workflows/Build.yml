@@ -1,0 +1,235 @@
+name: Build Orangefox
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      SYNC_URL:
+        description: 'SYNC_URL'
+        required: true
+        default: 'https://gitlab.com/OrangeFox/sync.git'
+      MANIFEST_BRANCH:
+        description: 'MANIFEST_BRANCH'
+        required: true
+        default: '14.1'
+        type: choice
+        options:
+          - 12.1
+          - 14.1
+      DEVICE_PATH:
+        description: 'DEVICE_PATH (this repository is copied here)'
+        required: true
+        default: 'device/infinix/X6886'
+      COMMON_TREE_URL:
+        description: 'COMMON_TREE_URL'
+        required: false
+      COMMON_TREE_BRANCH:
+        description: 'COMMON_TREE_BRANCH'
+        required: false
+        default: 'main'
+      COMMON_PATH:
+        description: 'COMMON_PATH'
+        required: false
+      DEVICE_NAME:
+        description: 'DEVICE_NAME'
+        required: true
+        default: 'X6886'
+      MAKEFILE_NAME:
+        description: 'MAKEFILE_NAME'
+        required: true
+        default: 'fox_X6886'
+      BUILD_TARGET:
+        description: 'BUILD_TARGET'
+        required: true
+        default: 'vendorboot'
+
+jobs:
+  build:
+    if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+
+    - name: Check Out
+      uses: actions/checkout@v4
+
+    - name: Cleanup
+      uses: rokibhasansagar/slimhub_actions@main
+
+    - name: Initialize workspace
+      run: |
+        mkdir workspace
+        cd workspace
+        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
+      id: pwd
+
+    - name: Prepare the build environment
+      run: |
+        sudo apt update && sudo apt upgrade -y
+        DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
+            linux-modules-extra-$(uname -r) \
+            git python3 tar aria2 patch
+        git clone https://gitlab.com/OrangeFox/misc/scripts
+        cd scripts
+        sudo bash setup/android_build_env.sh
+        sed -i 's/cd -/cd ../g' setup/install_android_sdk.sh
+        sudo bash setup/install_android_sdk.sh
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Install OpenJDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '11'
+
+    - name: Setup SSH Keys
+      if: ${{ startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+          ssh-private-key: |
+            ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Sync OrangeFox sources and minimal manifest
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}
+        git clone ${{ github.event.inputs.SYNC_URL }}
+        cd sync
+        ./orangefox_sync.sh --branch ${{ github.event.inputs.MANIFEST_BRANCH }} --path ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Install device tree from this repository
+      run: |
+        set -e
+        SRC=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        DEST="$SRC/${{ github.event.inputs.DEVICE_PATH }}"
+        mkdir -p "$DEST"
+        # Only tracked files (the sync workspace lives inside the checkout and must
+        # not be copied); CI files and helper tools are not part of the device tree.
+        git -C "${{ github.workspace }}" ls-files -z \
+          | grep -zv -e '^\.github/' -e '^tools/' \
+          | tar -C "${{ github.workspace }}" --null -T - -cf - \
+          | tar -C "$DEST" -xf -
+        test -f "$DEST/vendorsetup.sh" || { echo "::error::vendorsetup.sh missing in $DEST"; exit 1; }
+        test -d "$DEST/recovery/root/lib/modules" || { echo "::error::recovery/root/lib/modules missing"; exit 1; }
+        ls -al "$DEST"
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Clone common tree
+      if: |
+        github.event.inputs.COMMON_TREE_URL != null
+        && github.event.inputs.COMMON_PATH != null
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.COMMON_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 12
+
+    - name: Workaround for missing repo projects.
+      run : |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        repo sync external/gflags
+        repo sync external/guava
+        repo sync hardware/google/interfaces
+        repo sync hardware/google/pixel
+
+    - name: Building recovery
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        set +e
+        source build/envsetup.sh
+        source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        export FOX_USE_ZSTD_BINARY=1
+        set -eo pipefail
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng
+        make clean
+        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) 2>&1 | tee ${{ steps.pwd.outputs.workspace-folder }}/build.log
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Check the output directory
+      run: |
+        OUT=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+        ls -al "$OUT"
+
+    - name: Check module layout in ramdisks
+      continue-on-error: true
+      run: |
+        OUT=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+        for d in vendor_ramdisk recovery/root; do
+          n=$(find "$OUT/$d/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
+          echo "$d/lib/modules: $n top-level .ko"
+        done
+        # expected: many in vendor_ramdisk (platform), 0 in recovery/root (touch/ only)
+        n=$(find "$OUT/recovery/root/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
+        [ "$n" -eq 0 ] || echo "::warning::recovery/root/lib/modules still holds $n top-level .ko (duplicated with the platform ramdisk)"
+
+    - name: Prepare release files
+      id: rel
+      run: |
+        set -e
+        WS=${{ steps.pwd.outputs.workspace-folder }}
+        SRC=$WS/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        OUT=$SRC/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+        DEV=${{ github.event.inputs.DEVICE_NAME }}
+        DATE=$(date -u +%Y%m%d)
+        TREE_SHA=$(git -C "${{ github.workspace }}" rev-parse --short HEAD)
+        mkdir -p "$WS/release"
+
+        if [ ! -s "$OUT/vendor_boot.img" ]; then
+          echo "::error::vendor_boot.img was not produced; refusing to publish a release."
+          exit 1
+        fi
+        IMG_SIZE=$(stat -c %s "$OUT/vendor_boot.img")
+        echo "vendor_boot.img: $IMG_SIZE bytes (partition: 67108864)"
+        if [ "$IMG_SIZE" -gt 67108864 ]; then
+          echo "::error::vendor_boot.img is larger than the 64 MiB partition."
+          exit 1
+        fi
+        cp "$OUT/vendor_boot.img" "$WS/release/OrangeFox-${DEV}-${DATE}-vendor_boot.img"
+
+        cd "$WS/release"
+        sha256sum * > SHA256SUMS.txt
+        ls -al
+
+        echo "date=$DATE" >> "$GITHUB_OUTPUT"
+        echo "tree_sha=$TREE_SHA" >> "$GITHUB_OUTPUT"
+        echo "image=OrangeFox-${DEV}-${DATE}-vendor_boot.img" >> "$GITHUB_OUTPUT"
+
+    - name: Upload build log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log-${{ github.run_id }}
+        path: ${{ steps.pwd.outputs.workspace-folder }}/build.log
+        if-no-files-found: ignore
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          ${{ steps.pwd.outputs.workspace-folder }}/release/*
+        name: OrangeFox ${{ github.event.inputs.DEVICE_NAME }} - ${{ steps.rel.outputs.date }}
+        tag_name: ${{ github.event.inputs.DEVICE_NAME }}-${{ steps.rel.outputs.date }}-${{ github.run_number }}
+        prerelease: true
+        body: |
+          Unofficial OrangeFox build for **${{ github.event.inputs.DEVICE_NAME }}**.
+
+          | | |
+          |---|---|
+          | Manifest | ${{ github.event.inputs.MANIFEST_BRANCH }} |
+          | Target | ${{ github.event.inputs.BUILD_TARGET }} |
+          | Source | ${{ github.repository }} @ `${{ steps.rel.outputs.tree_sha }}` (${{ github.ref_name }}) |
+          | Built | ${{ steps.rel.outputs.date }} (UTC) |
+
+          Flash Step:
+          ```
+          fastboot flash vendor_boot ${{ steps.rel.outputs.image }}
+          ```
+          Verify the download with `SHA256SUMS.txt`. Back up before flashing.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
