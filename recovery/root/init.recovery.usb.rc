@@ -127,6 +127,10 @@ on property:sys.usb.ffs.ready=1 && property:sys.usb.config=fastboot && property:
 ### main function : mtp ###
 on property:sys.usb.config=mtp && property:sys.usb.configfs=1
     setprop sys.usb.pid 0x2008
+    write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "mtp"
+    symlink /config/usb_gadget/g1/functions/mtp.gs0 /config/usb_gadget/g1/configs/b.1/f1
+    write /config/usb_gadget/g1/UDC ${sys.usb.controller}
+    setprop sys.usb.state ${sys.usb.config}
 
 on property:sys.usb.config=mtp && property:sys.usb.configfs=1 && property:sys.usb.ffs.mtp.ready=1
     write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "mtp"
@@ -134,7 +138,6 @@ on property:sys.usb.config=mtp && property:sys.usb.configfs=1 && property:sys.us
     write /config/usb_gadget/g1/idProduct ${sys.usb.pid}
     write /config/usb_gadget/g1/os_desc/use 1
     symlink /config/usb_gadget/g1/functions/ffs.mtp /config/usb_gadget/g1/configs/b.1/f1
-    write /config/usb_gadget/g1/UDC "none"
     write /config/usb_gadget/g1/UDC ${sys.usb.controller}
     setprop sys.usb.state ${sys.usb.config}
 
@@ -149,7 +152,6 @@ on property:sys.usb.ffs.ready=1 && property:sys.usb.config=mtp,adb && property:s
     write /config/usb_gadget/g1/os_desc/use 1
     symlink /config/usb_gadget/g1/functions/ffs.mtp /config/usb_gadget/g1/configs/b.1/f1
     symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f2
-    write /config/usb_gadget/g1/UDC "none"
     write /config/usb_gadget/g1/UDC ${sys.usb.controller}
     setprop sys.usb.state ${sys.usb.config}
 
