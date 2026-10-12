@@ -11,19 +11,19 @@ on init
     insmod /lib/modules/touch/chipsemi_chsc5xxx_old.ko
     export LD_LIBRARY_PATH /system/lib64:/vendor/lib64
 	setprop sys.usb.configfs 1
-	setprop sys.usb.controller "musb-hdrc"
-    setprop sys.usb.ffs.aio_compat 1
+    setprop sys.usb.controller "musb-hdrc"
+    setprop sys.usb.ffs.aio_compat 0
 	setprop crypto.ready 1
 
 	start vendor.boot-default
-	
+
 on boot
-    write /sys/devices/system/cpu/cpufreq/policy0/scaling_governor performance
-    write /sys/devices/system/cpu/cpufreq/policy6/scaling_governor performance
+    setprop sys.usb.config adb
 
 on fs
     wait /dev/block/platform/soc/11270000.ufshci
     symlink /dev/block/platform/soc/11270000.ufshci /dev/block/bootdevice
+    install_keyring
 
 on property:persist.vendor.mtk.pl_lnk=1
     symlink /dev/block/mapper/pl_a /dev/block/by-name/preloader_raw_a
