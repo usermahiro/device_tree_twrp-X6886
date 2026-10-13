@@ -24,9 +24,6 @@ TW_NO_EXFAT_FUSE            := true
 # Debug
 TWRP_INCLUDE_LOGCAT := true
 
-# Use our own init.recovery.usb.rc
-TW_EXCLUDE_DEFAULT_USB_INIT := true
-
 # Fastbootd
 TW_INCLUDE_FASTBOOTD := true
 

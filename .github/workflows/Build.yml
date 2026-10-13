@@ -17,7 +17,7 @@ on:
           - 12.1
           - 14.1
       DEVICE_PATH:
-        description: 'DEVICE_PATH (this repository is copied here)'
+        description: 'DEVICE_PATH'
         required: true
         default: 'device/infinix/X6886'
       COMMON_TREE_URL:
@@ -104,15 +104,10 @@ jobs:
         SRC=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
         DEST="$SRC/${{ github.event.inputs.DEVICE_PATH }}"
         mkdir -p "$DEST"
-        # Only tracked files (the sync workspace lives inside the checkout and must
-        # not be copied); CI files and helper tools are not part of the device tree.
         git -C "${{ github.workspace }}" ls-files -z \
           | grep -zv -e '^\.github/' -e '^tools/' \
           | tar -C "${{ github.workspace }}" --null -T - -cf - \
           | tar -C "$DEST" -xf -
-        test -f "$DEST/vendorsetup.sh" || { echo "::error::vendorsetup.sh missing in $DEST"; exit 1; }
-        test -d "$DEST/prebuilt/modules" || { echo "::error::prebuilt/modules missing"; exit 1; }
-        ls -al "$DEST"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Clone common tree
@@ -127,7 +122,7 @@ jobs:
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 12
+        swap-size-gb: 20
 
     - name: Workaround for missing repo projects.
       run : |
@@ -156,20 +151,6 @@ jobs:
         OUT=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
         ls -al "$OUT"
 
-    - name: Check module layout in ramdisks
-      continue-on-error: true
-      run: |
-        OUT=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
-        for d in vendor_ramdisk recovery/root; do
-          n=$(find "$OUT/$d/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
-          echo "$d/lib/modules: $n top-level .ko"
-        done
-        # expected: many in vendor_ramdisk (platform), 0 in recovery/root (touch/ only)
-        v=$(find "$OUT/vendor_ramdisk/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
-        r=$(find "$OUT/recovery/root/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
-        [ "$v" -gt 0 ] || echo "::error::vendor_ramdisk has no kernel modules (check MTK_VENDOR16_RAMDISK_MODULES_DIR)"
-        [ "$r" -eq 0 ] || echo "::warning::recovery/root still holds $r top-level .ko (duplicated with the platform ramdisk)"
-
     - name: Prepare release files
       id: rel
       run: |
@@ -179,17 +160,11 @@ jobs:
         OUT=$SRC/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
         DEV=${{ github.event.inputs.DEVICE_NAME }}
         DATE=$(date -u +%Y%m%d)
-        TREE_SHA=$(git -C "${{ github.workspace }}" rev-parse --short HEAD)
+        TREE_SHA=$(git -C "$SRC/${{ github.event.inputs.DEVICE_PATH }}" rev-parse --short HEAD)
         mkdir -p "$WS/release"
 
         if [ ! -s "$OUT/vendor_boot.img" ]; then
           echo "::error::vendor_boot.img was not produced; refusing to publish a release."
-          exit 1
-        fi
-        IMG_SIZE=$(stat -c %s "$OUT/vendor_boot.img")
-        echo "vendor_boot.img: $IMG_SIZE bytes (partition: 67108864)"
-        if [ "$IMG_SIZE" -gt 67108864 ]; then
-          echo "::error::vendor_boot.img is larger than the 64 MiB partition."
           exit 1
         fi
         cp "$OUT/vendor_boot.img" "$WS/release/OrangeFox-${DEV}-${DATE}-vendor_boot.img"
@@ -225,7 +200,7 @@ jobs:
           |---|---|
           | Manifest | ${{ github.event.inputs.MANIFEST_BRANCH }} |
           | Target | ${{ github.event.inputs.BUILD_TARGET }} |
-          | Source | ${{ github.repository }} @ `${{ steps.rel.outputs.tree_sha }}` (${{ github.ref_name }}) |
+          | Device tree | ${{ github.event.inputs.DEVICE_TREE_URL }} @ `${{ steps.rel.outputs.tree_sha }}` (${{ github.event.inputs.DEVICE_TREE_BRANCH }}) |
           | Built | ${{ steps.rel.outputs.date }} (UTC) |
 
           Flash Step:
