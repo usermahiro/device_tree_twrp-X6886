@@ -111,7 +111,7 @@ jobs:
           | tar -C "${{ github.workspace }}" --null -T - -cf - \
           | tar -C "$DEST" -xf -
         test -f "$DEST/vendorsetup.sh" || { echo "::error::vendorsetup.sh missing in $DEST"; exit 1; }
-        test -d "$DEST/recovery/root/lib/modules" || { echo "::error::recovery/root/lib/modules missing"; exit 1; }
+        test -d "$DEST/prebuilt/modules" || { echo "::error::prebuilt/modules missing"; exit 1; }
         ls -al "$DEST"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
@@ -165,8 +165,10 @@ jobs:
           echo "$d/lib/modules: $n top-level .ko"
         done
         # expected: many in vendor_ramdisk (platform), 0 in recovery/root (touch/ only)
-        n=$(find "$OUT/recovery/root/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
-        [ "$n" -eq 0 ] || echo "::warning::recovery/root/lib/modules still holds $n top-level .ko (duplicated with the platform ramdisk)"
+        v=$(find "$OUT/vendor_ramdisk/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
+        r=$(find "$OUT/recovery/root/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
+        [ "$v" -gt 0 ] || echo "::error::vendor_ramdisk has no kernel modules (check MTK_VENDOR16_RAMDISK_MODULES_DIR)"
+        [ "$r" -eq 0 ] || echo "::warning::recovery/root still holds $r top-level .ko (duplicated with the platform ramdisk)"
 
     - name: Prepare release files
       id: rel
