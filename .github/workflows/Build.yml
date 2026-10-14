@@ -146,7 +146,7 @@ jobs:
         set -eo pipefail
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng
         make clean
-        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) 2>&1 \vert{} tee${{ steps.pwd.outputs.workspace-folder }}/build.log
+        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) 2>&1 | tee ${{ steps.pwd.outputs.workspace-folder }}/build.log
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Check the output directory
