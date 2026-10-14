@@ -16,7 +16,7 @@ on:
           - 12.1
           - 14.1
       DEVICE_PATH:
-        description: 'DEVICE_PATH (this repository is copied here)'
+        description: 'DEVICE_PATH'
         required: true
         default: 'device/infinix/X6886'
       COMMON_TREE_URL:
@@ -108,7 +108,8 @@ jobs:
           | tar -C "${{ github.workspace }}" --null -T - -cf - \
           | tar -C "$DEST" -xf -
         test -f "$DEST/vendorsetup.sh" || { echo "::error::vendorsetup.sh missing in $DEST"; exit 1; }
-        test -d "$DEST/recovery/root/lib/modules" || { echo "::error::recovery/root/lib/modules missing"; exit 1; }
+        test -d "$DEST/prebuilt/modules" || { echo "::error::prebuilt/modules missing"; exit 1; }
+        test -d "$DEST/recovery/root/lib/modules/touch" || { echo "::error::recovery/root/lib/modules/touch missing"; exit 1; }
         ls -al "$DEST"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
@@ -145,7 +146,7 @@ jobs:
         set -eo pipefail
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng
         make clean
-        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) 2>&1 | tee ${{ steps.pwd.outputs.workspace-folder }}/build.log
+        mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) 2>&1 \vert{} tee${{ steps.pwd.outputs.workspace-folder }}/build.log
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Check the output directory
@@ -157,13 +158,21 @@ jobs:
       continue-on-error: true
       run: |
         OUT=${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
-        for d in vendor_ramdisk recovery/root; do
-          n=$(find "$OUT/$d/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
-          echo "$d/lib/modules: $n top-level .ko"
-        done
-        # expected: many in vendor_ramdisk (platform), 0 in recovery/root (touch/ only)
-        n=$(find "$OUT/recovery/root/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
-        [ "$n" -eq 0 ] || echo "::warning::recovery/root/lib/modules still holds $n top-level .ko (duplicated with the platform ramdisk)"
+
+        v_count=$(find "$OUT/vendor_ramdisk/lib/modules" -name '*.ko' 2>/dev/null | wc -l)
+        echo "vendor_ramdisk/lib/modules: $v_count .ko"
+
+        t_count=$(find "$OUT/recovery/root/lib/modules/touch" -name '*.ko' 2>/dev/null | wc -l)
+        echo "recovery/root/lib/modules/touch: $t_count .ko"
+        if [ "$t_count" -eq 0 ]; then
+          echo "::warning::Modul touchscreen di recovery/root/lib/modules/touch tidak ditemukan!"
+        fi
+
+        root_count=$(find "$OUT/recovery/root/lib/modules" -maxdepth 1 -name '*.ko' 2>/dev/null | wc -l)
+        echo "recovery/root/lib/modules: $root_count .ko"
+        if [ "$root_count" -gt 0 ]; then
+          echo "::warning::Ditemukan $root_count .ko langsung di root recovery/root/lib/modules! Modul platform berisiko menduplikasi vendor_ramdisk."
+        fi
 
     - name: Prepare release files
       id: rel
@@ -181,7 +190,7 @@ jobs:
           echo "::error::vendor_boot.img was not produced; refusing to publish a release."
           exit 1
         fi
-        IMG_SIZE=$(stat -c %s "$OUT/vendor_boot.img")
+        IMG_SIZE=$(stat -c \%s "$OUT/vendor_boot.img")
         echo "vendor_boot.img: $IMG_SIZE bytes (partition: 67108864)"
         if [ "$IMG_SIZE" -gt 67108864 ]; then
           echo "::error::vendor_boot.img is larger than the 64 MiB partition."
@@ -210,7 +219,7 @@ jobs:
       with:
         files: |
           ${{ steps.pwd.outputs.workspace-folder }}/release/*
-        name: OrangeFox ${{ github.event.inputs.DEVICE_NAME }} - ${{ steps.rel.outputs.date }}
+        name: OrangeFox ${{ github.event.inputs.DEVICE_NAME }} -${{ steps.rel.outputs.date }}
         tag_name: ${{ github.event.inputs.DEVICE_NAME }}-${{ steps.rel.outputs.date }}-${{ github.run_number }}
         prerelease: true
         body: |
