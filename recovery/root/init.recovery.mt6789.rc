@@ -4,6 +4,7 @@ on init
     restorecon /kmsg
     restorecon_recursive /sys/devices/platform/soc/soc:mtk-leds
     restorecon_recursive /sys/devices/platform/soc/soc:regulator-vibrator/leds/vibrator
+    restorecon_recursive /sys/devices/virtual/torch/torch
     restorecon /sys/devices/platform/soc/mt_usb/saving
     symlink /tmp/fstab /etc/fstab
     insmod /lib/modules/touch/adaptive-ts.ko
