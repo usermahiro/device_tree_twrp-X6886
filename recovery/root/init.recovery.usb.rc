@@ -3,9 +3,9 @@ on early-init
     setprop sys.usb.configfs 0
 
 on post-fs
-    # Use Google Vendor ID for ADB, Sideload, and fastboot (stock recovery-like)
+    # Use Google Vendor ID for ADB, Sideload, and fastboot
     setprop sys.usb.vid "0x18D1"
-    # Use MTK Vendor ID for Composite ADB (stock system-like)
+    # Use MTK Vendor ID for Composite ADB
     setprop sys.usb.vid.mtk "0x0E8D"
 
     mkdir /config
