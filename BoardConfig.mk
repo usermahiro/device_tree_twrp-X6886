@@ -53,6 +53,12 @@ BOARD_BOOTCONFIG += kernel.rcu_nocbs=all
 BOARD_BOOTCONFIG += kernel.rcutree.enable_rcu_lazy=1
 BOARD_BOOTCONFIG += kernel.rcupdate.rcu_cpu_stall_cputime=1
 
+# Permissive variant: set FOX_PERMISSIVE=1 in the build environment
+# (needs an eng/userdebug build, which the workflow uses: lunch ...-eng)
+ifeq ($(FOX_PERMISSIVE),1)
+BOARD_BOOTCONFIG += androidboot.selinux=permissive
+endif
+
 BOARD_MKBOOTIMG_ARGS += --dtb $(TARGET_PREBUILT_DTB)
 BOARD_MKBOOTIMG_ARGS += --vendor_cmdline "$(BOARD_VENDOR_CMDLINE)"
 BOARD_MKBOOTIMG_ARGS += --pagesize $(BOARD_PAGE_SIZE) --board ""

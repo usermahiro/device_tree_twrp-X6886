@@ -3,17 +3,18 @@
 #<src>				<mnt_point>		<type>		<mnt_flags and options>															<fs_mgr_flags>
 # Logical partitions
 system				/system			auto		ro																	wait,slotselect,logical
-system_dlkm				/system			auto		ro																	wait,slotselect,logical
+system_dlkm			/system_dlkm		auto		ro																	wait,slotselect,logical
 vendor				/vendor			auto		ro																	wait,slotselect,logical
 product				/product		auto		ro																	wait,slotselect,logical
 system_ext			/system_ext		auto		ro																	wait,slotselect,logical
-vendor_dlkm			/vendor_dlkm	auto		ro																	wait,slotselect,logical
+odm				/odm			auto		ro																	wait,slotselect,logical
+vendor_dlkm			/vendor_dlkm		auto		ro																	wait,slotselect,logical
 odm_dlkm			/odm_dlkm		auto		ro																	wait,slotselect,logical
 
 # Transsion partitions
 tr_carrier			/tr_carrier		auto		ro																	wait,slotselect,logical,nofail
 tr_company			/tr_company		auto		ro																	wait,slotselect,logical,nofail
-tr_overlayfs		/tr_overlayfs	auto		ro																	wait,slotselect,logical,nofail
+tr_overlayfs			/tr_overlayfs		auto		ro																	wait,slotselect,logical,nofail
 tr_preload			/tr_preload		auto		ro																	wait,slotselect,logical,nofail
 tr_product			/tr_product		auto		ro																	wait,slotselect,logical,nofail
 tr_region			/tr_region		auto		ro																	wait,slotselect,logical,nofail

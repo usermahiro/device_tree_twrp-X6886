@@ -6,9 +6,20 @@ on init
     restorecon_recursive /sys/devices/platform/soc/soc:regulator-vibrator/leds/vibrator
     restorecon /sys/devices/platform/soc/mt_usb/saving
     symlink /tmp/fstab /etc/fstab
+    # Transsion Touch
     insmod /lib/modules/touch/adaptive-ts.ko
     insmod /lib/modules/touch/focaltech_ft3683g.ko
     insmod /lib/modules/touch/chipsemi_chsc5xxx_old.ko
+    # Trannsion Flashlight
+    insmod /lib/modules/flashlight/mtk_dynamic_loading_throttling.ko
+    insmod /lib/modules/flashlight/mtk_mdpm.ko
+    insmod /lib/modules/flashlight/mtk_pbm.ko
+    insmod /lib/modules/flashlight/flashlight.ko
+    insmod /lib/modules/flashlight/tran_flashlight.ko
+    insmod /lib/modules/flashlight/ocp81378.ko
+    insmod /lib/modules/flashlight/cw8722.ko
+    restorecon_recursive /sys/devices/virtual/torch
+    # Other
     export LD_LIBRARY_PATH /system/lib64:/vendor/lib64
 	setprop sys.usb.configfs 1
 	setprop sys.usb.controller "musb-hdrc"

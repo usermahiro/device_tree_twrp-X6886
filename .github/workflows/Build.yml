@@ -44,10 +44,15 @@ on:
 
 jobs:
   build:
+    name: build (${{ matrix.variant }})
     if: github.event.repository.owner.id == github.event.sender.id
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [enforcing, permissive]
     steps:
 
     - name: Check Out
@@ -143,6 +148,10 @@ jobs:
         source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         export FOX_USE_ZSTD_BINARY=1
+        if [ "${{ matrix.variant }}" = "permissive" ]; then
+          export FOX_PERMISSIVE=1
+        fi
+        echo "Variant: ${{ matrix.variant }} (FOX_PERMISSIVE=${FOX_PERMISSIVE:-0})"
         set -eo pipefail
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng
         make clean
@@ -174,51 +183,94 @@ jobs:
           echo "::warning::Ditemukan $root_count .ko langsung di root recovery/root/lib/modules! Modul platform berisiko menduplikasi vendor_ramdisk."
         fi
 
-    - name: Prepare release files
-      id: rel
+    - name: Verify variant image
       run: |
         set -e
         WS=${{ steps.pwd.outputs.workspace-folder }}
-        SRC=$WS/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        OUT=$SRC/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
-        DEV=${{ github.event.inputs.DEVICE_NAME }}
-        DATE=$(date -u +%Y%m%d)
-        TREE_SHA=$(git -C "${{ github.workspace }}" rev-parse --short HEAD)
-        mkdir -p "$WS/release"
+        OUT=$WS/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}
+        V=${{ matrix.variant }}
+        mkdir -p "$WS/variant"
 
         if [ ! -s "$OUT/vendor_boot.img" ]; then
-          echo "::error::vendor_boot.img was not produced; refusing to publish a release."
+          echo "::error::vendor_boot.img was not produced ($V)."
           exit 1
         fi
-        IMG_SIZE=$(stat -c \%s "$OUT/vendor_boot.img")
-        echo "vendor_boot.img: $IMG_SIZE bytes (partition: 67108864)"
+        IMG_SIZE=$(stat -c %s "$OUT/vendor_boot.img")
+        echo "vendor_boot ($V): $IMG_SIZE bytes (partition: 67108864)"
         if [ "$IMG_SIZE" -gt 67108864 ]; then
-          echo "::error::vendor_boot.img is larger than the 64 MiB partition."
+          echo "::error::vendor_boot ($V) is larger than the 64 MiB partition."
           exit 1
         fi
-        cp "$OUT/vendor_boot.img" "$WS/release/OrangeFox-${DEV}-${DATE}-vendor_boot.img"
 
-        cd "$WS/release"
-        sha256sum * > SHA256SUMS.txt
-        ls -al
+        # sanity check: only the permissive image may carry the bootconfig flag
+        if grep -aq "androidboot.selinux=permissive" "$OUT/vendor_boot.img"; then HAS=1; else HAS=0; fi
+        if [ "$V" = "permissive" ] && [ "$HAS" != "1" ]; then
+          echo "::error::permissive image has no androidboot.selinux=permissive in bootconfig."
+          exit 1
+        fi
+        if [ "$V" = "enforcing" ] && [ "$HAS" != "0" ]; then
+          echo "::error::enforcing image unexpectedly contains androidboot.selinux=permissive."
+          exit 1
+        fi
+        cp "$OUT/vendor_boot.img" "$WS/variant/vendor_boot-$V.img"
 
-        echo "date=$DATE" >> "$GITHUB_OUTPUT"
-        echo "tree_sha=$TREE_SHA" >> "$GITHUB_OUTPUT"
-        echo "image=OrangeFox-${DEV}-${DATE}-vendor_boot.img" >> "$GITHUB_OUTPUT"
+    - name: Upload variant image
+      uses: actions/upload-artifact@v4
+      with:
+        name: vendor_boot-${{ matrix.variant }}
+        path: ${{ steps.pwd.outputs.workspace-folder }}/variant/vendor_boot-${{ matrix.variant }}.img
+        if-no-files-found: error
 
     - name: Upload build log
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-log-${{ github.run_id }}
+        name: build-log-${{ github.run_id }}-${{ matrix.variant }}
         path: ${{ steps.pwd.outputs.workspace-folder }}/build.log
         if-no-files-found: ignore
+
+  release:
+    name: release
+    needs: build
+    if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+
+    - name: Download variant images
+      uses: actions/download-artifact@v4
+      with:
+        pattern: vendor_boot-*
+        path: images
+        merge-multiple: true
+
+    - name: Prepare release files
+      id: rel
+      run: |
+        set -e
+        DEV=${{ github.event.inputs.DEVICE_NAME }}
+        DATE=$(date -u +%Y%m%d)
+        SHA=${GITHUB_SHA::7}
+        mkdir -p release
+        for V in enforcing permissive; do
+          test -s "images/vendor_boot-$V.img" || { echo "::error::missing $V image"; exit 1; }
+          cp "images/vendor_boot-$V.img" "release/OrangeFox-${DEV}-${DATE}-${SHA}-vendor_boot-${V}.img"
+        done
+        cd release
+        sha256sum * > SHA256SUMS.txt
+        ls -al
+
+        echo "date=$DATE" >> "$GITHUB_OUTPUT"
+        echo "tree_sha=$SHA" >> "$GITHUB_OUTPUT"
+        echo "image_enforcing=OrangeFox-${DEV}-${DATE}-${SHA}-vendor_boot-enforcing.img" >> "$GITHUB_OUTPUT"
+        echo "image_permissive=OrangeFox-${DEV}-${DATE}-${SHA}-vendor_boot-permissive.img" >> "$GITHUB_OUTPUT"
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ${{ steps.pwd.outputs.workspace-folder }}/release/*
+          release/*
         name: OrangeFox ${{ github.event.inputs.DEVICE_NAME }} -${{ steps.rel.outputs.date }}
         tag_name: ${{ github.event.inputs.DEVICE_NAME }}-${{ steps.rel.outputs.date }}-${{ github.run_number }}
         prerelease: true
@@ -232,9 +284,16 @@ jobs:
           | Source | ${{ github.repository }} @ `${{ steps.rel.outputs.tree_sha }}` (${{ github.ref_name }}) |
           | Built | ${{ steps.rel.outputs.date }} (UTC) |
 
+          Two variants are published (pick one):
+
+          | File | SELinux |
+          |---|---|
+          | `${{ steps.rel.outputs.image_enforcing }}` | enforcing (default) |
+          | `${{ steps.rel.outputs.image_permissive }}` | permissive (`androidboot.selinux=permissive` in bootconfig) |
+
           Flash Step:
           ```
-          fastboot flash vendor_boot ${{ steps.rel.outputs.image }}
+          fastboot flash vendor_boot <image>
           ```
           Verify the download with `SHA256SUMS.txt`. Back up before flashing.
       env:
