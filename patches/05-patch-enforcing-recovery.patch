@@ -18,8 +18,8 @@
  }
  
  bool IsEnforcing() {
-+    // Recovery is built with a complete enforcing policy, including on eng builds.
-+    if (IsRecoveryMode()) return true;
++    // Recovery is enforcing by default; on eng builds androidboot.selinux=permissive is honored.
++    if (IsRecoveryMode() && !ALLOW_PERMISSIVE_SELINUX) return true;
      if (ALLOW_PERMISSIVE_SELINUX) {
          return StatusFromProperty() == SELINUX_ENFORCING;
      }
