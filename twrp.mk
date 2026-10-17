@@ -16,10 +16,11 @@ TW_INCLUDE_LPTOOLS := true
 TW_INCLUDE_ZSTD := true
 
 # TWRP file system
-TW_ENABLE_FS_COMPRESSION    := true
-TW_INCLUDE_FUSE_NTFS        := true
-TW_INCLUDE_NTFS_3G          := true
-TW_NO_EXFAT_FUSE            := true
+TW_ENABLE_FS_COMPRESSION := true
+TW_INCLUDE_FUSE_EXFAT := true
+TW_INCLUDE_FUSE_NTFS := true
+TW_INCLUDE_NTFS_3G := true
+TW_NO_EXFAT_FUSE := true
 
 # Debug
 TWRP_INCLUDE_LOGCAT := true
@@ -36,8 +37,11 @@ TW_EXTRA_LANGUAGES := true
 TW_EXCLUDE_APEX := true
 TW_FRAMERATE := 120
 TW_THEME := portrait_hdpi
-TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID  := true
+TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
 TW_LOAD_VENDOR_BOOT_MODULES := true
+
+# Fixup can't boot to system
+TW_NO_FASTBOOT_BOOT := true
 
 # StatusBar
 TW_STATUS_ICONS_ALIGN := center
