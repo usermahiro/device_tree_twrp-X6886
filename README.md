@@ -26,4 +26,12 @@ Unofficial OrangeFox device tree.
 3. The image is published as a pre-release together with `SHA256SUMS.txt`.
 
 ```bash
-fastboot flash vendor_boot OrangeFox-X6886-<date>-vendor_boot.img
+fastboot flash vendor_boot_a OrangeFox-X6886-<date>-<sha>-vendor_boot.img
+fastboot flash vendor_boot_b OrangeFox-X6886-<date>-<sha>-vendor_boot.img
+```
+
+Flash both slots: the device is A/B, so a single slot loses the recovery when the other slot becomes active.
+
+## SELinux
+
+The enforcing recovery patches are dropped; the recovery uses the stock policy. `common/mt6789-vendor16/sepolicy/` is not compiled and is kept only for reference.
