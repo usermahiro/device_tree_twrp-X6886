@@ -34,7 +34,6 @@ BOARD_KERNEL_SEPARATED_DTBO := true
 
 # Kernel
 TARGET_NO_KERNEL := true
-include $(DEVICE_PATH)/common/mt6789-vendor16/BoardConfig.mk
 TARGET_PREBUILT_DTB := $(DEVICE_PATH)/prebuilt/dtb
 
 BOARD_BOOT_HEADER_VERSION := 4
