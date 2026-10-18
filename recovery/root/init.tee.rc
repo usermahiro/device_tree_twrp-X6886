@@ -31,8 +31,7 @@ service mobicore /vendor/bin/mcDriverDaemon --P1 /mnt/vendor/persist/mcRegistry 
 	-r /vendor/app/mcRegistry/07210000000000000000000000000000.drbin
     user root
     group root system
-    # No seclabel: the custom mtk_recovery_tee domain is not compiled anymore
-    # (enforcing patches dropped), an unknown context makes init refuse to start it.
+    seclabel u:r:recovery:s0
 
 # t-Drv naming
 # 020f0000000000000000000000000000.drbin : utils
