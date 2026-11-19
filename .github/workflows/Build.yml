@@ -83,10 +83,11 @@ jobs:
 
     - name: Prepare the build environment
       run: |
-        sudo apt update && sudo apt upgrade -y
+        sudo apt update
         DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
             linux-modules-extra-$(uname -r) \
             git python3 tar aria2 patch ccache
+        sudo apt upgrade -y
         git clone https://gitlab.com/OrangeFox/misc/scripts
         cd scripts
         sudo bash setup/android_build_env.sh
