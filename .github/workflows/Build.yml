@@ -62,8 +62,6 @@ jobs:
       CCACHE_MAXSIZE: 5G
       CCACHE_COMPRESS: '1'
       CCACHE_COMPRESSLEVEL: '6'
-      # Fresh repo sync gives the toolchain new mtimes every run: hash the
-      # compiler by content or every single compile misses.
       CCACHE_COMPILERCHECK: content
       CCACHE_SLOPPINESS: include_file_mtime,include_file_ctime,time_macros
     steps:
@@ -83,11 +81,9 @@ jobs:
 
     - name: Prepare the build environment
       run: |
-        sudo apt update
         DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
             linux-modules-extra-$(uname -r) \
             git python3 tar aria2 patch ccache
-        sudo apt upgrade -y
         git clone https://gitlab.com/OrangeFox/misc/scripts
         cd scripts
         sudo bash setup/android_build_env.sh
